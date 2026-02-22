@@ -49,6 +49,7 @@ Rules:
 - Convert ALL dates to YYYY-MM-DD regardless of source format
 - Country names should be full names, not ISO codes
 - If a field is unreadable, use null and add a warning
+- NEVER use "N/A", "n/a", or "N.A." as values — use null instead
 - Return ONLY the JSON object, nothing else
 """
 
@@ -96,6 +97,8 @@ Rules:
 - Convert dates to YYYY-MM-DD
 - Convert state to 2-letter abbreviation
 - Empty/unfilled fields should be null
+- NEVER use "N/A", "n/a", or "N.A." as values — use null instead
+- If the form has non-US addresses (e.g. foreign ZIP/postal codes), still extract them as-is
 - If handwriting is unclear, provide best guess and add a warning
 - Return ONLY the JSON object, nothing else
 """
@@ -108,9 +111,19 @@ def _parse_json(text: str) -> dict:
     return json.loads(cleaned)
 
 
+_NA_PATTERNS = {"n/a", "na", "n.a.", "n/a.", "none", "not applicable", ""}
+
+
+def _clean_value(v: object) -> object:
+    """Convert N/A-like strings to None."""
+    if isinstance(v, str) and v.strip().lower() in _NA_PATTERNS:
+        return None
+    return v
+
+
 def _strip_none(d: dict) -> dict:
-    """Remove keys with None values so Pydantic defaults apply."""
-    return {k: v for k, v in d.items() if v is not None}
+    """Clean N/A values and remove Nones so Pydantic defaults apply."""
+    return {k: v for k, v in ((_k, _clean_value(_v)) for _k, _v in d.items()) if v is not None}
 
 
 def _find_file(file_id: str) -> Path | None:
