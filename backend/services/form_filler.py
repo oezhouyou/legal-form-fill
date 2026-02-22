@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import uuid
 from pathlib import Path
 from typing import Any, Awaitable, Callable
@@ -183,4 +184,6 @@ class FormFiller:
             elif not value and await locator.is_checked():
                 await locator.uncheck()
         elif input_type == "date":
-            await locator.fill(str(value))
+            # Date inputs only accept YYYY-MM-DD; skip non-date values like "N/A"
+            if re.match(r"^\d{4}-\d{2}-\d{2}$", str(value)):
+                await locator.fill(str(value))
