@@ -55,3 +55,16 @@ export function connectProgress(
 export function screenshotUrl(id: string): string {
   return `${BASE}/api/screenshots/${id}`;
 }
+
+export interface HealthStatus {
+  status: string;
+  checks: {
+    anthropic_api_key: string;
+    upload_directory: string;
+  };
+}
+
+export async function checkHealth(): Promise<HealthStatus> {
+  const res = await fetch(`${BASE}/api/health`);
+  return res.json();
+}

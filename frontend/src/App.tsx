@@ -7,6 +7,7 @@ import {
   RotateCcw,
   Sparkles,
   Zap,
+  AlertTriangle,
 } from "lucide-react";
 
 import StepIndicator from "./components/StepIndicator";
@@ -14,7 +15,8 @@ import FileUpload from "./components/FileUpload";
 import ExtractedData from "./components/ExtractedData";
 import ProgressView from "./components/ProgressView";
 
-import { extractData, fillForm, connectProgress } from "./api";
+import { extractData, fillForm, connectProgress, checkHealth } from "./api";
+import type { HealthStatus } from "./api";
 import type {
   UploadResult,
   FormData,
@@ -71,6 +73,8 @@ const EMPTY_FORM: FormData = {
 
 export default function App() {
   const [step, setStep] = useState(0);
+  const [healthIssues, setHealthIssues] = useState<string[]>([]);
+  const [backendReady, setBackendReady] = useState(true);
 
   const [passportFile, setPassportFile] = useState<UploadResult | null>(null);
   const [g28File, setG28File] = useState<UploadResult | null>(null);
@@ -87,6 +91,25 @@ export default function App() {
 
   useEffect(() => {
     return () => wsRef.current?.close();
+  }, []);
+
+  useEffect(() => {
+    checkHealth()
+      .then((h: HealthStatus) => {
+        const issues: string[] = [];
+        if (h.checks.anthropic_api_key === "missing")
+          issues.push("Anthropic API key is not configured — document extraction will not work.");
+        if (h.checks.anthropic_api_key === "invalid")
+          issues.push("Anthropic API key is invalid — document extraction will not work.");
+        if (h.checks.upload_directory === "unavailable")
+          issues.push("Upload directory is not writable — file uploads will fail.");
+        setHealthIssues(issues);
+        setBackendReady(h.status === "ok");
+      })
+      .catch(() => {
+        setHealthIssues(["Unable to reach the backend server."]);
+        setBackendReady(false);
+      });
   }, []);
 
   const handleExtract = useCallback(async () => {
@@ -172,6 +195,19 @@ export default function App() {
         </div>
       </header>
 
+      {healthIssues.length > 0 && (
+        <div className="max-w-5xl mx-auto px-6 pt-6">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3 animate-fade-in">
+            <AlertTriangle size={18} className="text-amber-500 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              {healthIssues.map((msg, i) => (
+                <p key={i} className="text-sm text-amber-700">{msg}</p>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       <main className="max-w-5xl mx-auto px-6 py-10">
         <StepIndicator current={step} />
 
@@ -215,7 +251,7 @@ export default function App() {
 
             <div className="flex justify-end">
               <button
-                disabled={!hasFiles || extracting}
+                disabled={!hasFiles || extracting || !backendReady}
                 onClick={handleExtract}
                 className="group flex items-center gap-2.5 px-7 py-3.5 bg-brand-600 text-white rounded-xl font-semibold text-sm hover:bg-brand-700 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-brand-600/20 hover:shadow-xl hover:shadow-brand-600/25"
               >

@@ -6,8 +6,11 @@ Run with: ``uvicorn main:app --host 0.0.0.0 --port 8000``
 
 from __future__ import annotations
 
+import json
 import logging
 import os
+import urllib.error
+import urllib.request
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -32,20 +35,63 @@ logger = logging.getLogger("legal_form_fill")
 
 
 # ---------------------------------------------------------------------------
+# API key validation
+# ---------------------------------------------------------------------------
+
+_api_key_status: str = "missing"
+
+
+def _validate_api_key(key: str) -> str:
+    """Validate an Anthropic API key by calling the models endpoint.
+
+    Returns ``"configured"`` if valid, ``"invalid"`` if rejected,
+    or ``"configured"`` on network errors (benefit of the doubt).
+    """
+    try:
+        req = urllib.request.Request(
+            "https://api.anthropic.com/v1/models?limit=1",
+            headers={
+                "x-api-key": key,
+                "anthropic-version": "2023-06-01",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=10):
+            return "configured"
+    except urllib.error.HTTPError as e:
+        if e.code == 401:
+            return "invalid"
+        # Other HTTP errors (rate limit, server error) don't mean the key is bad
+        return "configured"
+    except Exception:
+        # Network timeout / DNS failure — don't block startup
+        logger.warning("Could not validate API key (network issue?), assuming valid")
+        return "configured"
+
+
+# ---------------------------------------------------------------------------
 # Lifespan — startup / shutdown hooks
 # ---------------------------------------------------------------------------
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Run setup on startup and teardown on shutdown."""
+    global _api_key_status
+
     os.makedirs(settings.upload_dir, exist_ok=True)
     logger.info("Upload directory ready: %s", settings.upload_dir)
     logger.info("Target form URL: %s", settings.target_form_url)
     logger.info("Claude model: %s", settings.claude_model)
-    logger.info(
-        "API key configured: %s",
-        "yes" if settings.anthropic_api_key else "NO — extraction will fail",
-    )
+
+    if not settings.anthropic_api_key:
+        _api_key_status = "missing"
+        logger.warning("No API key configured — extraction will fail")
+    else:
+        _api_key_status = _validate_api_key(settings.anthropic_api_key)
+        if _api_key_status == "invalid":
+            logger.warning("API key is invalid — extraction will fail")
+        else:
+            logger.info("API key validated successfully")
+
     yield
     logger.info("Shutting down")
 
@@ -136,14 +182,13 @@ async def general_exception_handler(request: Request, exc: Exception):
 @app.get("/api/health", tags=["Health"], summary="Service health check")
 async def health():
     """Return service status and dependency readiness."""
-    api_key_set = bool(settings.anthropic_api_key)
     upload_dir_ok = os.path.isdir(settings.upload_dir) and os.access(settings.upload_dir, os.W_OK)
 
-    status = "ok" if (api_key_set and upload_dir_ok) else "degraded"
+    status = "ok" if (_api_key_status == "configured" and upload_dir_ok) else "degraded"
     return {
         "status": status,
         "checks": {
-            "anthropic_api_key": "configured" if api_key_set else "missing",
+            "anthropic_api_key": _api_key_status,
             "upload_directory": "writable" if upload_dir_ok else "unavailable",
         },
     }
