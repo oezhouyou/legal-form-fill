@@ -258,11 +258,12 @@ export default function App() {
                 Back
               </button>
               <button
+                disabled={filling}
                 onClick={() => {
                   setStep(2);
                   handleFill();
                 }}
-                className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
                 Fill Form
                 <ArrowRight size={18} />

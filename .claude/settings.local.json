@@ -8,7 +8,10 @@
       "Bash(npx tsc:*)",
       "Bash(npx vite build:*)",
       "Bash(python -c:*)",
-      "Bash(python -m py_compile:*)"
+      "Bash(python -m py_compile:*)",
+      "Bash(docker compose build:*)",
+      "Bash(docker compose:*)",
+      "Bash(curl:*)"
     ]
   }
 }

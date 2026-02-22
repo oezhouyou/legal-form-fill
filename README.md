@@ -5,20 +5,40 @@ Automated document extraction and form population system. Upload a passport and/
 ## Architecture
 
 ```
-┌─────────────┐     ┌──────────────┐     ┌─────────────────┐
-│  React UI   │────▶│  FastAPI      │────▶│  Claude Vision   │
-│  (Vite/TS)  │◀────│  Backend      │◀────│  (Extraction)    │
-└─────────────┘     └──────┬───────┘     └─────────────────┘
+┌─────────────┐     ┌──────────────┐      ┌─────────────────┐
+│  React UI   │────▶│  FastAPI     │────▶│  Claude Vision  │
+│  (Vite/TS)  │◀────│  Backend     │◀────│  (Extraction)   │
+└─────────────┘     └──────┬───────┘      └─────────────────┘
                            │
                     ┌──────▼───────┐     ┌─────────────────┐
-                    │  Playwright   │────▶│  Target Form     │
-                    │  (Headless)   │     │  (GitHub Pages)  │
+                    │  Playwright  │────▶│  Target Form    │
+                    │  (Headless)  │     │  (GitHub Pages) │
                     └──────────────┘     └─────────────────┘
 ```
 
 **Tech Stack:** FastAPI, Claude API (Sonnet), Playwright, React, TypeScript, Tailwind CSS
 
-## Quick Start
+## Quick Start (Docker)
+
+### Prerequisites
+
+- Docker & Docker Compose
+- An [Anthropic API key](https://console.anthropic.com/)
+
+### Run
+
+```bash
+git clone <repo-url>
+cd legal-form-fill
+cp .env.example .env
+# Edit .env and add your ANTHROPIC_API_KEY
+
+docker compose up --build
+```
+
+Open **http://localhost:3000** in your browser.
+
+## Local Development (without Docker)
 
 ### Prerequisites
 
