@@ -33,8 +33,10 @@ cd legal-form-fill
 cp .env.example .env
 # Edit .env and add your ANTHROPIC_API_KEY
 
-docker compose up --build
+make up
 ```
+
+This builds both containers, starts them, and prints the URL when ready. You can also use `docker compose up --build -d` directly.
 
 Open **http://localhost:3000** in your browser.
 
