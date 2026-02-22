@@ -11,7 +11,8 @@
       "Bash(python -m py_compile:*)",
       "Bash(docker compose build:*)",
       "Bash(docker compose:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(docker volume rm:*)"
     ]
   }
 }

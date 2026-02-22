@@ -1,8 +1,15 @@
+"""Claude vision document extraction service.
+
+Sends uploaded document images to the Anthropic Claude API and parses the
+structured JSON response into validated Pydantic models.
+"""
+
 from __future__ import annotations
 
 import json
 import logging
 import re
+import time
 from pathlib import Path
 
 import anthropic
@@ -22,6 +29,10 @@ from services.document_processor import (
 )
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Extraction prompts
+# ---------------------------------------------------------------------------
 
 PASSPORT_PROMPT = """\
 You are analyzing a passport image. Extract all visible information and return ONLY valid JSON (no markdown fences).
@@ -105,20 +116,29 @@ Rules:
 """
 
 
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+
 def _parse_json(text: str) -> dict:
     """Parse JSON from Claude's response, stripping markdown fences if present."""
     cleaned = re.sub(r"^```(?:json)?\s*", "", text.strip())
     cleaned = re.sub(r"\s*```$", "", cleaned)
-    return json.loads(cleaned)
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        logger.error("Failed to parse JSON from Claude response: %.200s", text)
+        raise
 
 
 def _strip_none(d: dict) -> dict:
-    """Remove keys with None values so Pydantic defaults apply."""
+    """Remove keys whose value is ``None`` so Pydantic defaults apply."""
     return {k: v for k, v in d.items() if v is not None}
 
 
 def _find_file(file_id: str) -> Path | None:
-    """Find uploaded file by its UUID prefix."""
+    """Locate an uploaded file by its UUID stem inside the upload directory."""
     upload_dir = Path(settings.upload_dir)
     for f in upload_dir.iterdir():
         if f.stem == file_id:
@@ -126,11 +146,19 @@ def _find_file(file_id: str) -> Path | None:
     return None
 
 
+# ---------------------------------------------------------------------------
+# Extractor
+# ---------------------------------------------------------------------------
+
+
 class ClaudeExtractor:
-    def __init__(self):
+    """Extracts structured form data from document images via Claude vision."""
+
+    def __init__(self) -> None:
         self.client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
     def _call_vision(self, images: list[bytes], prompt: str) -> dict:
+        """Send images + prompt to Claude and return the parsed JSON response."""
         content: list[dict] = []
         for img in images:
             content.append(
@@ -145,36 +173,48 @@ class ClaudeExtractor:
             )
         content.append({"type": "text", "text": prompt})
 
+        start = time.perf_counter()
         response = self.client.messages.create(
-            model="claude-opus-4-6",
-            max_tokens=4096,
+            model=settings.claude_model,
+            max_tokens=settings.claude_max_tokens,
             messages=[{"role": "user", "content": content}],
+        )
+        elapsed = time.perf_counter() - start
+        logger.info(
+            "Claude API call completed in %.1fs (model=%s, tokens=%d)",
+            elapsed,
+            settings.claude_model,
+            response.usage.output_tokens,
         )
 
         return _parse_json(response.content[0].text)
 
-    def extract_passport(self, file_path: str) -> tuple[PassportInfo, dict, list]:
-        ext = Path(file_path).suffix.lower()
-        if ext == ".pdf":
-            images = pdf_to_images(file_path)
-        else:
-            images = [image_to_png_bytes(file_path)]
+    # ---- Passport ----------------------------------------------------------
 
+    def extract_passport(self, file_path: str) -> tuple[PassportInfo, dict, list]:
+        """Extract passport bio-data from a passport image or PDF scan."""
+        ext = Path(file_path).suffix.lower()
+        images = pdf_to_images(file_path) if ext == ".pdf" else [image_to_png_bytes(file_path)]
+
+        logger.info("Extracting passport data from %s (%d image(s))", file_path, len(images))
         result = self._call_vision(images, PASSPORT_PROMPT)
+
         passport_data = result.get("passport", {})
         confidence = result.get("confidence", {})
         warnings = result.get("warnings", [])
 
         return PassportInfo(**_strip_none(passport_data)), confidence, warnings
 
-    def extract_g28(self, file_path: str) -> tuple[AttorneyInfo, EligibilityInfo, dict, list]:
-        ext = Path(file_path).suffix.lower()
-        if ext == ".pdf":
-            images = pdf_to_images(file_path)
-        else:
-            images = [image_to_png_bytes(file_path)]
+    # ---- G-28 --------------------------------------------------------------
 
+    def extract_g28(self, file_path: str) -> tuple[AttorneyInfo, EligibilityInfo, dict, list]:
+        """Extract attorney and eligibility info from a G-28 form."""
+        ext = Path(file_path).suffix.lower()
+        images = pdf_to_images(file_path) if ext == ".pdf" else [image_to_png_bytes(file_path)]
+
+        logger.info("Extracting G-28 data from %s (%d image(s))", file_path, len(images))
         result = self._call_vision(images, G28_PROMPT)
+
         attorney_data = result.get("attorney", {})
         eligibility_data = result.get("eligibility", {})
         confidence = result.get("confidence", {})
@@ -187,11 +227,17 @@ class ClaudeExtractor:
             warnings,
         )
 
+    # ---- Orchestrator ------------------------------------------------------
+
     def extract(self, files: dict[str, str]) -> ExtractionResult:
-        """Extract data from uploaded files.
+        """Extract data from one or more uploaded documents.
 
         Args:
-            files: mapping of file_id -> doc_type ("passport" or "g28")
+            files: mapping of ``file_id`` -> ``doc_type`` (``"passport"`` or ``"g28"``).
+
+        Returns:
+            An :class:`ExtractionResult` containing merged form data, confidence
+            scores, and any warnings produced during extraction.
         """
         form_data = FormData()
         all_confidence: dict[str, float] = {}
@@ -200,6 +246,7 @@ class ClaudeExtractor:
         for file_id, doc_type in files.items():
             file_path = _find_file(file_id)
             if not file_path:
+                logger.warning("File not found for id=%s", file_id)
                 all_warnings.append(f"File not found: {file_id}")
                 continue
 
@@ -215,10 +262,17 @@ class ClaudeExtractor:
                     form_data.eligibility = eligibility
                     all_confidence.update(conf)
                     all_warnings.extend(warns)
-            except Exception as e:
-                logger.exception(f"Extraction error for {file_id}")
-                all_warnings.append(f"Error extracting {doc_type}: {str(e)}")
+                else:
+                    logger.warning("Unknown doc_type '%s' for file %s", doc_type, file_id)
+            except Exception:
+                logger.exception("Extraction failed for %s (type=%s)", file_id, doc_type)
+                all_warnings.append(f"Error extracting {doc_type}: see server logs for details")
 
+        logger.info(
+            "Extraction complete: %d file(s), %d warnings",
+            len(files),
+            len(all_warnings),
+        )
         return ExtractionResult(
             data=form_data,
             confidence=all_confidence,
