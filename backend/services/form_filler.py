@@ -172,7 +172,11 @@ class FormFiller:
         if input_type == "text":
             await locator.fill(str(value))
         elif input_type == "select":
-            await locator.select_option(value=str(value))
+            try:
+                await locator.select_option(value=str(value))
+            except Exception:
+                # Value not in dropdown (e.g. foreign state) — skip gracefully
+                pass
         elif input_type == "checkbox":
             if value and not await locator.is_checked():
                 await locator.check()

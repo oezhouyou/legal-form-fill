@@ -67,7 +67,7 @@ Extract ALL filled-in data and return ONLY valid JSON (no markdown fences).
     "apt_type": "apt or ste or flr or null",
     "apt_number": "string or null",
     "city": "string",
-    "state": "2-letter US state code",
+    "state": "2-letter US state code if US address, otherwise the state/province name as-is",
     "zip_code": "string",
     "country": "string",
     "daytime_phone": "string",
