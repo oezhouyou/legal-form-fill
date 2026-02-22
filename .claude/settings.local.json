@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:mendrika-alma.github.io)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "Bash(npm create:*)",
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx vite build:*)",
+      "Bash(python -c:*)",
+      "Bash(python -m py_compile:*)"
+    ]
+  }
+}
