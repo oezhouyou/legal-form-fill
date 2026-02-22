@@ -1,10 +1,12 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import {
-  FileText,
+  Scale,
   ArrowRight,
   ArrowLeft,
   Loader2,
   RotateCcw,
+  Sparkles,
+  Zap,
 } from "lucide-react";
 
 import StepIndicator from "./components/StepIndicator";
@@ -70,27 +72,21 @@ const EMPTY_FORM: FormData = {
 export default function App() {
   const [step, setStep] = useState(0);
 
-  // Step 0: Upload
   const [passportFile, setPassportFile] = useState<UploadResult | null>(null);
   const [g28File, setG28File] = useState<UploadResult | null>(null);
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
 
-  // Step 1: Review
   const [formData, setFormData] = useState<FormData>(EMPTY_FORM);
   const [warnings, setWarnings] = useState<string[]>([]);
 
-  // Step 2: Fill
   const [filling, setFilling] = useState(false);
   const [progressItems, setProgressItems] = useState<FormFillProgress[]>([]);
   const [fillResult, setFillResult] = useState<FormFillResult | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
-  // Cleanup WS on unmount
   useEffect(() => {
-    return () => {
-      wsRef.current?.close();
-    };
+    return () => wsRef.current?.close();
   }, []);
 
   const handleExtract = useCallback(async () => {
@@ -118,7 +114,6 @@ export default function App() {
     setProgressItems([]);
     setFillResult(null);
 
-    // Connect WebSocket for progress
     const ws = connectProgress((msg) => {
       setProgressItems((prev) => [...prev, msg]);
     });
@@ -155,46 +150,56 @@ export default function App() {
   const hasFiles = passportFile !== null || g28File !== null;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30">
       {/* Header */}
-      <header className="bg-white border-b shadow-sm">
-        <div className="max-w-4xl mx-auto px-6 py-4 flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-            <FileText className="text-white" size={22} />
+      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-gray-100">
+        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center gap-4">
+          <div className="w-11 h-11 bg-gradient-to-br from-brand-600 to-brand-800 rounded-xl flex items-center justify-center shadow-lg shadow-brand-600/20">
+            <Scale className="text-white" size={21} />
           </div>
-          <div>
-            <h1 className="text-lg font-bold text-gray-900">Legal Form Fill</h1>
-            <p className="text-xs text-gray-500">
-              Automated document extraction & form population
+          <div className="flex-1">
+            <h1 className="text-lg font-bold text-gray-900 tracking-tight">
+              Legal Form Fill
+            </h1>
+            <p className="text-xs text-gray-400 font-medium">
+              AI-Powered Document Extraction & Automation
             </p>
+          </div>
+          <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-gray-400 font-medium bg-gray-50 px-3 py-1.5 rounded-full">
+            <Zap size={12} className="text-amber-400" />
+            Powered by Claude Vision + Playwright
           </div>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-6 py-8">
+      <main className="max-w-5xl mx-auto px-6 py-10">
         <StepIndicator current={step} />
 
         {/* Step 0: Upload */}
         {step === 0 && (
-          <div className="space-y-6">
-            <div className="bg-white rounded-2xl shadow-sm border p-6">
-              <h2 className="text-lg font-semibold text-gray-800 mb-4">
-                Upload Documents
-              </h2>
-              <p className="text-sm text-gray-500 mb-6">
-                Upload a passport and/or G-28 form. The system will extract data
-                using AI-powered vision analysis.
-              </p>
+          <div className="animate-fade-in space-y-6">
+            <div className="bg-white rounded-2xl shadow-sm shadow-gray-200/50 border border-gray-100 p-8">
+              <div className="text-center mb-8">
+                <h2 className="text-xl font-bold text-gray-900">
+                  Upload Your Documents
+                </h2>
+                <p className="text-sm text-gray-500 mt-2 max-w-md mx-auto">
+                  Upload a passport and/or G-28 form. Our AI will extract
+                  structured data from your documents automatically.
+                </p>
+              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <FileUpload
-                  label="Passport Image"
+                  label="Passport"
+                  description="Photo page — PDF, JPG or PNG"
                   docType="passport"
                   accept=".pdf,.jpg,.jpeg,.png"
                   onUploaded={setPassportFile}
                 />
                 <FileUpload
-                  label="G-28 Form (PDF)"
+                  label="G-28 Form"
+                  description="Notice of Appearance — PDF"
                   docType="g28"
                   accept=".pdf,.jpg,.jpeg,.png"
                   onUploaded={setG28File}
@@ -202,7 +207,7 @@ export default function App() {
               </div>
 
               {extractError && (
-                <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+                <div className="mt-6 bg-red-50 border border-red-100 rounded-xl p-4 text-sm text-red-700 animate-fade-in">
                   {extractError}
                 </div>
               )}
@@ -212,17 +217,21 @@ export default function App() {
               <button
                 disabled={!hasFiles || extracting}
                 onClick={handleExtract}
-                className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="group flex items-center gap-2.5 px-7 py-3.5 bg-brand-600 text-white rounded-xl font-semibold text-sm hover:bg-brand-700 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-brand-600/20 hover:shadow-xl hover:shadow-brand-600/25"
               >
                 {extracting ? (
                   <>
                     <Loader2 className="animate-spin" size={18} />
-                    Extracting Data...
+                    Analyzing Documents...
                   </>
                 ) : (
                   <>
-                    Extract & Continue
-                    <ArrowRight size={18} />
+                    <Sparkles size={18} />
+                    Extract Data
+                    <ArrowRight
+                      size={16}
+                      className="group-hover:translate-x-0.5 transition-transform"
+                    />
                   </>
                 )}
               </button>
@@ -232,15 +241,17 @@ export default function App() {
 
         {/* Step 1: Review */}
         {step === 1 && (
-          <div className="space-y-6">
-            <div className="bg-white rounded-2xl shadow-sm border p-6">
-              <h2 className="text-lg font-semibold text-gray-800 mb-1">
-                Review Extracted Data
-              </h2>
-              <p className="text-sm text-gray-500 mb-6">
-                Verify and correct the extracted information before filling the
-                form.
-              </p>
+          <div className="animate-fade-in space-y-6">
+            <div className="bg-white rounded-2xl shadow-sm shadow-gray-200/50 border border-gray-100 p-8">
+              <div className="mb-6">
+                <h2 className="text-xl font-bold text-gray-900">
+                  Review Extracted Data
+                </h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Verify and correct the information below before populating
+                  the form.
+                </p>
+              </div>
 
               <ExtractedData
                 data={formData}
@@ -252,9 +263,9 @@ export default function App() {
             <div className="flex justify-between">
               <button
                 onClick={() => setStep(0)}
-                className="flex items-center gap-2 px-5 py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                className="flex items-center gap-2 px-5 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium text-sm hover:bg-gray-50 active:scale-[0.98] transition-all"
               >
-                <ArrowLeft size={18} />
+                <ArrowLeft size={16} />
                 Back
               </button>
               <button
@@ -263,10 +274,14 @@ export default function App() {
                   setStep(2);
                   handleFill();
                 }}
-                className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                className="group flex items-center gap-2.5 px-7 py-3.5 bg-brand-600 text-white rounded-xl font-semibold text-sm hover:bg-brand-700 active:scale-[0.98] disabled:opacity-40 transition-all shadow-lg shadow-brand-600/20 hover:shadow-xl hover:shadow-brand-600/25"
               >
+                <Sparkles size={18} />
                 Fill Form
-                <ArrowRight size={18} />
+                <ArrowRight
+                  size={16}
+                  className="group-hover:translate-x-0.5 transition-transform"
+                />
               </button>
             </div>
           </div>
@@ -274,35 +289,38 @@ export default function App() {
 
         {/* Step 2: Fill */}
         {step === 2 && (
-          <div className="space-y-6">
-            <div className="bg-white rounded-2xl shadow-sm border p-6">
-              <h2 className="text-lg font-semibold text-gray-800 mb-1">
-                Automated Form Filling
-              </h2>
-              <p className="text-sm text-gray-500 mb-6">
-                Playwright is navigating to the form and filling in each field.
-              </p>
+          <div className="animate-fade-in space-y-6">
+            <div className="bg-white rounded-2xl shadow-sm shadow-gray-200/50 border border-gray-100 p-8">
+              <div className="mb-6">
+                <h2 className="text-xl font-bold text-gray-900">
+                  Automated Form Filling
+                </h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Playwright is populating each field on the target form
+                  in real time.
+                </p>
+              </div>
 
               <ProgressView items={progressItems} result={fillResult} />
             </div>
 
-            <div className="flex justify-center">
-              {fillResult && (
+            {fillResult && (
+              <div className="flex justify-center">
                 <button
                   onClick={reset}
-                  className="flex items-center gap-2 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                  className="flex items-center gap-2 px-6 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium text-sm hover:bg-gray-50 active:scale-[0.98] transition-all"
                 >
-                  <RotateCcw size={18} />
+                  <RotateCcw size={16} />
                   Start Over
                 </button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         )}
       </main>
 
-      <footer className="text-center text-xs text-gray-400 py-6">
-        Built with FastAPI + Claude Vision + Playwright + React
+      <footer className="text-center text-[11px] text-gray-300 py-8 font-medium">
+        FastAPI &middot; Claude Vision &middot; Playwright &middot; React &middot; Tailwind
       </footer>
     </div>
   );
