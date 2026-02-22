@@ -108,6 +108,11 @@ def _parse_json(text: str) -> dict:
     return json.loads(cleaned)
 
 
+def _strip_none(d: dict) -> dict:
+    """Remove keys with None values so Pydantic defaults apply."""
+    return {k: v for k, v in d.items() if v is not None}
+
+
 def _find_file(file_id: str) -> Path | None:
     """Find uploaded file by its UUID prefix."""
     upload_dir = Path(settings.upload_dir)
@@ -137,7 +142,7 @@ class ClaudeExtractor:
         content.append({"type": "text", "text": prompt})
 
         response = self.client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-opus-4-6",
             max_tokens=4096,
             messages=[{"role": "user", "content": content}],
         )
@@ -156,7 +161,7 @@ class ClaudeExtractor:
         confidence = result.get("confidence", {})
         warnings = result.get("warnings", [])
 
-        return PassportInfo(**passport_data), confidence, warnings
+        return PassportInfo(**_strip_none(passport_data)), confidence, warnings
 
     def extract_g28(self, file_path: str) -> tuple[AttorneyInfo, EligibilityInfo, dict, list]:
         ext = Path(file_path).suffix.lower()
@@ -172,8 +177,8 @@ class ClaudeExtractor:
         warnings = result.get("warnings", [])
 
         return (
-            AttorneyInfo(**attorney_data),
-            EligibilityInfo(**eligibility_data),
+            AttorneyInfo(**_strip_none(attorney_data)),
+            EligibilityInfo(**_strip_none(eligibility_data)),
             confidence,
             warnings,
         )
