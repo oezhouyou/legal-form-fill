@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Check, Loader2, AlertCircle, Image } from "lucide-react";
 import type { FormFillProgress, FormFillResult } from "../types";
 import { screenshotUrl } from "../api";
@@ -9,6 +10,15 @@ interface Props {
 
 export default function ProgressView({ items, result }: Props) {
   const latestProgress = items.length > 0 ? items[items.length - 1].progress : 0;
+
+  // Deduplicate: keep only the latest status per field
+  const fields = useMemo(() => {
+    const map = new Map<string, FormFillProgress>();
+    for (const item of items) {
+      map.set(item.field, item);
+    }
+    return Array.from(map.values());
+  }, [items]);
 
   return (
     <div className="space-y-6">
@@ -30,9 +40,9 @@ export default function ProgressView({ items, result }: Props) {
 
       {/* Field log */}
       <div className="max-h-64 overflow-y-auto border rounded-lg divide-y">
-        {items.map((item, i) => (
+        {fields.map((item) => (
           <div
-            key={i}
+            key={item.field}
             className="flex items-center gap-2 px-3 py-2 text-sm"
           >
             {item.status === "filling" && (
